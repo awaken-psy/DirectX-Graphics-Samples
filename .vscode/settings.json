@@ -1,0 +1,8 @@
+{
+    "files.exclude": {
+        "**/packages.config": true,
+        "**/*.vcxproj": true,
+        "**/*.vcxproj.filters": true,
+        "**/*.vcxproj.user": true
+    }
+}

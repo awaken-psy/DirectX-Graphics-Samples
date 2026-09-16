@@ -1,4 +1,4 @@
-//*********************************************************
+﻿//*********************************************************
 //
 // Copyright (c) Microsoft. All rights reserved.
 // This code is licensed under the MIT License (MIT).
@@ -12,20 +12,27 @@
 #include "stdafx.h"
 #include "D3D12HelloBundles.h"
 
-extern "C" { __declspec(dllexport) extern const UINT D3D12SDKVersion = 618; }
-extern "C" { __declspec(dllexport) extern const char* D3D12SDKPath = u8".\\D3D12\\"; }
+extern "C"
+{
+    __declspec(dllexport) extern const UINT D3D12SDKVersion = 618;
+}
+extern "C"
+{
+    __declspec(dllexport) extern const char *D3D12SDKPath = u8".\\D3D12\\";
+}
 
-D3D12HelloBundles::D3D12HelloBundles(UINT width, UINT height, std::wstring name) :
-    DXSample(width, height, name),
-    m_frameIndex(0),
-    m_viewport(0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height)),
-    m_scissorRect(0, 0, static_cast<LONG>(width), static_cast<LONG>(height)),
-    m_rtvDescriptorSize(0)
+D3D12HelloBundles::D3D12HelloBundles(UINT width, UINT height, std::wstring name) : DXSample(width, height, name),
+                                                                                   m_frameIndex(0),
+                                                                                   m_viewport(0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height)),
+                                                                                   m_scissorRect(0, 0, static_cast<LONG>(width), static_cast<LONG>(height)),
+                                                                                   m_rtvDescriptorSize(0)
 {
 }
 
 void D3D12HelloBundles::OnInit()
 {
+    // LoadPipeline 创建每帧命令和可复用命令各自需要的基础对象；
+    // LoadAssets 随后准备三角形资源，并把稳定不变的绘制步骤预先录入 Bundle。
     LoadPipeline();
     LoadAssets();
 }
@@ -61,8 +68,7 @@ void D3D12HelloBundles::LoadPipeline()
         ThrowIfFailed(D3D12CreateDevice(
             warpAdapter.Get(),
             D3D_FEATURE_LEVEL_11_0,
-            IID_PPV_ARGS(&m_device)
-            ));
+            IID_PPV_ARGS(&m_device)));
     }
     else
     {
@@ -72,42 +78,42 @@ void D3D12HelloBundles::LoadPipeline()
         ThrowIfFailed(D3D12CreateDevice(
             hardwareAdapter.Get(),
             D3D_FEATURE_LEVEL_11_0,
-            IID_PPV_ARGS(&m_device)
-            ));
+            IID_PPV_ARGS(&m_device)));
     }
 
     // Describe and create the command queue.
-    D3D12_COMMAND_QUEUE_DESC queueDesc = {};
-    queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
-    queueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+    {
+        D3D12_COMMAND_QUEUE_DESC queueDesc = {};
+        queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+        queueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
 
-    ThrowIfFailed(m_device->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&m_commandQueue)));
+        ThrowIfFailed(m_device->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&m_commandQueue)));
 
-    // Describe and create the swap chain.
-    DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
-    swapChainDesc.BufferCount = FrameCount;
-    swapChainDesc.Width = m_width;
-    swapChainDesc.Height = m_height;
-    swapChainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-    swapChainDesc.SampleDesc.Count = 1;
+        // Describe and create the swap chain.
+        DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
+        swapChainDesc.BufferCount = FrameCount;
+        swapChainDesc.Width = m_width;
+        swapChainDesc.Height = m_height;
+        swapChainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+        swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+        swapChainDesc.SampleDesc.Count = 1;
 
-    ComPtr<IDXGISwapChain1> swapChain;
-    ThrowIfFailed(factory->CreateSwapChainForHwnd(
-        m_commandQueue.Get(),        // Swap chain needs the queue so that it can force a flush on it.
-        Win32Application::GetHwnd(),
-        &swapChainDesc,
-        nullptr,
-        nullptr,
-        &swapChain
-        ));
+        ComPtr<IDXGISwapChain1> swapChain;
+        ThrowIfFailed(factory->CreateSwapChainForHwnd(
+            m_commandQueue.Get(), // Swap chain needs the queue so that it can force a flush on it.
+            Win32Application::GetHwnd(),
+            &swapChainDesc,
+            nullptr,
+            nullptr,
+            &swapChain));
 
-    // This sample does not support fullscreen transitions.
-    ThrowIfFailed(factory->MakeWindowAssociation(Win32Application::GetHwnd(), DXGI_MWA_NO_ALT_ENTER));
+        // This sample does not support fullscreen transitions.
+        ThrowIfFailed(factory->MakeWindowAssociation(Win32Application::GetHwnd(), DXGI_MWA_NO_ALT_ENTER));
 
-    ThrowIfFailed(swapChain.As(&m_swapChain));
-    m_frameIndex = m_swapChain->GetCurrentBackBufferIndex();
+        ThrowIfFailed(swapChain.As(&m_swapChain));
+        m_frameIndex = m_swapChain->GetCurrentBackBufferIndex();
+    }
 
     // Create descriptor heaps.
     {
@@ -134,7 +140,13 @@ void D3D12HelloBundles::LoadPipeline()
         }
     }
 
+    // 【核心】CreateCommandAllocator 只创建命令存储管理器，不会录制或执行任何 GPU 命令。
+    // DIRECT 表示这块存储将交给 DIRECT 类型的主命令列表使用。
     ThrowIfFailed(m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_commandAllocator)));
+
+    // 【核心】Bundle 命令列表的类型是 BUNDLE，因此还要创建一个类型匹配的独立分配器。
+    // 这个分配器与上面的主分配器有不同的复用周期：主分配器每帧安全地 Reset，
+    // 而本例保留 Bundle 分配器中的命令存储，不 Reset 它，从而让录好的 Bundle 持续有效。
     ThrowIfFailed(m_device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_BUNDLE, IID_PPV_ARGS(&m_bundleAllocator)));
 }
 
@@ -154,8 +166,8 @@ void D3D12HelloBundles::LoadAssets()
 
     // Create the pipeline state, which includes compiling and loading shaders.
     {
-        UINT8* pVertexShaderData = nullptr;
-        UINT8* pPixelShaderData = nullptr;
+        UINT8 *pVertexShaderData = nullptr;
+        UINT8 *pPixelShaderData = nullptr;
         UINT vertexShaderDataLength = 0;
         UINT pixelShaderDataLength = 0;
 
@@ -164,14 +176,13 @@ void D3D12HelloBundles::LoadAssets()
 
         // Define the vertex input layout.
         D3D12_INPUT_ELEMENT_DESC inputElementDescs[] =
-        {
-            { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-            { "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
-        };
+            {
+                {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+                {"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0}};
 
         // Describe and create the graphics pipeline state object (PSO).
         D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
-        psoDesc.InputLayout = { inputElementDescs, _countof(inputElementDescs) };
+        psoDesc.InputLayout = {inputElementDescs, _countof(inputElementDescs)};
         psoDesc.pRootSignature = m_rootSignature.Get();
         psoDesc.VS = CD3DX12_SHADER_BYTECODE(pVertexShaderData, vertexShaderDataLength);
         psoDesc.PS = CD3DX12_SHADER_BYTECODE(pPixelShaderData, pixelShaderDataLength);
@@ -187,8 +198,14 @@ void D3D12HelloBundles::LoadAssets()
         ThrowIfFailed(m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineState)));
     }
 
-    // Create the command list.
-    ThrowIfFailed(m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_commandAllocator.Get(), m_pipelineState.Get(), IID_PPV_ARGS(&m_commandList)));
+    // 【复习】创建每帧使用的主命令列表。它使用 DIRECT 分配器，并以当前图形 PSO 作为初始管线状态。
+    // Device 创建命令列表后，它立即处于“正在录制”状态；这里只是还没有要写入的当帧命令。
+    ThrowIfFailed(m_device->CreateCommandList(
+        0,
+        D3D12_COMMAND_LIST_TYPE_DIRECT,
+        m_commandAllocator.Get(),
+        m_pipelineState.Get(),
+        IID_PPV_ARGS(&m_commandList)));
 
     // Command lists are created in the recording state, but there is nothing
     // to record yet. The main loop expects it to be closed, so close it now.
@@ -198,17 +215,16 @@ void D3D12HelloBundles::LoadAssets()
     {
         // Define the geometry for a triangle.
         Vertex triangleVertices[] =
-        {
-            { { 0.0f, 0.25f * m_aspectRatio, 0.0f }, { 1.0f, 0.0f, 0.0f, 1.0f } },
-            { { 0.25f, -0.25f * m_aspectRatio, 0.0f }, { 0.0f, 1.0f, 0.0f, 1.0f } },
-            { { -0.25f, -0.25f * m_aspectRatio, 0.0f }, { 0.0f, 0.0f, 1.0f, 1.0f } }
-        };
+            {
+                {{0.0f, 0.25f * m_aspectRatio, 0.0f}, {1.0f, 0.0f, 0.0f, 1.0f}},
+                {{0.25f, -0.25f * m_aspectRatio, 0.0f}, {0.0f, 1.0f, 0.0f, 1.0f}},
+                {{-0.25f, -0.25f * m_aspectRatio, 0.0f}, {0.0f, 0.0f, 1.0f, 1.0f}}};
 
         const UINT vertexBufferSize = sizeof(triangleVertices);
 
-        // Note: using upload heaps to transfer static data like vert buffers is not 
-        // recommended. Every time the GPU needs it, the upload heap will be marshalled 
-        // over. Please read up on Default Heap usage. An upload heap is used here for 
+        // Note: using upload heaps to transfer static data like vert buffers is not
+        // recommended. Every time the GPU needs it, the upload heap will be marshalled
+        // over. Please read up on Default Heap usage. An upload heap is used here for
         // code simplicity and because there are very few verts to actually transfer.
         ThrowIfFailed(m_device->CreateCommittedResource(
             &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
@@ -219,9 +235,9 @@ void D3D12HelloBundles::LoadAssets()
             IID_PPV_ARGS(&m_vertexBuffer)));
 
         // Copy the triangle data to the vertex buffer.
-        UINT8* pVertexDataBegin;
-        CD3DX12_RANGE readRange(0, 0);        // We do not intend to read from this resource on the CPU.
-        ThrowIfFailed(m_vertexBuffer->Map(0, &readRange, reinterpret_cast<void**>(&pVertexDataBegin)));
+        UINT8 *pVertexDataBegin;
+        CD3DX12_RANGE readRange(0, 0); // We do not intend to read from this resource on the CPU.
+        ThrowIfFailed(m_vertexBuffer->Map(0, &readRange, reinterpret_cast<void **>(&pVertexDataBegin)));
         memcpy(pVertexDataBegin, triangleVertices, sizeof(triangleVertices));
         m_vertexBuffer->Unmap(0, nullptr);
 
@@ -233,11 +249,32 @@ void D3D12HelloBundles::LoadAssets()
 
     // Create and record the bundle.
     {
-        ThrowIfFailed(m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_BUNDLE, m_bundleAllocator.Get(), m_pipelineState.Get(), IID_PPV_ARGS(&m_bundle)));
+        // 【核心】创建 Bundle 命令列表：类型必须与 m_bundleAllocator 的 BUNDLE 类型匹配。
+        // m_pipelineState 是 Bundle 自己的初始 PSO；Bundle 不从调用它的主命令列表继承 PSO。
+        // 与普通命令列表一样，CreateCommandList 返回后 Bundle 已处于录制状态。
+        ThrowIfFailed(m_device->CreateCommandList(
+            0,
+            D3D12_COMMAND_LIST_TYPE_BUNDLE,
+            m_bundleAllocator.Get(),
+            m_pipelineState.Get(),
+            IID_PPV_ARGS(&m_bundle)));
+
+        // 【核心】下面四次调用只是把命令写入 Bundle，并没有立即执行绘制。
+        // 根签名规定着色器绑定契约。本例没有外部着色器资源，但仍显式记录同一个空根签名。
         m_bundle->SetGraphicsRootSignature(m_rootSignature.Get());
+
+        // Bundle 不继承主命令列表的图元拓扑，因此在自己的记录中明确指定三角形列表。
         m_bundle->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+        // 把顶点缓冲区视图绑定到输入槽 0。Bundle 记录的是对这份 GPU 资源的使用关系；
+        // m_vertexBuffer 必须在 Bundle 可能执行期间一直存活。
         m_bundle->IASetVertexBuffers(0, 1, &m_vertexBufferView);
+
+        // 记录“读取 3 个顶点、绘制 1 个实例”。此刻 CPU 仍在录制，GPU 还没有画三角形。
         m_bundle->DrawInstanced(3, 1, 0, 0);
+
+        // 结束并验证这份 Bundle 记录。只有已关闭的 Bundle 才能被主命令列表调用。
+        // 本例之后不再 Reset m_bundle 或 m_bundleAllocator，因此这份记录可以跨帧复用。
         ThrowIfFailed(m_bundle->Close());
     }
 
@@ -253,8 +290,8 @@ void D3D12HelloBundles::LoadAssets()
             ThrowIfFailed(HRESULT_FROM_WIN32(GetLastError()));
         }
 
-        // Wait for the command list to execute; we are reusing the same command 
-        // list in our main loop but for now, we just want to wait for setup to 
+        // Wait for the command list to execute; we are reusing the same command
+        // list in our main loop but for now, we just want to wait for setup to
         // complete before continuing.
         WaitForPreviousFrame();
     }
@@ -268,11 +305,12 @@ void D3D12HelloBundles::OnUpdate()
 // Render the scene.
 void D3D12HelloBundles::OnRender()
 {
-    // Record all the commands we need to render the scene into the command list.
+    // 【核心】先录制这一帧的主命令列表；其中会插入一次对预录 Bundle 的调用。
     PopulateCommandList();
 
-    // Execute the command list.
-    ID3D12CommandList* ppCommandLists[] = { m_commandList.Get() };
+    // 【核心】命令队列只接收 DIRECT 主命令列表。Bundle 不单独提交；
+    // GPU 执行主命令列表时，会在 ExecuteBundle 所在的位置展开执行它的命令。
+    ID3D12CommandList *ppCommandLists[] = {m_commandList.Get()};
     m_commandQueue->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
 
     // Present the frame.
@@ -292,21 +330,29 @@ void D3D12HelloBundles::OnDestroy()
 
 void D3D12HelloBundles::PopulateCommandList()
 {
-    // Command list allocators can only be reset when the associated 
-    // command lists have finished execution on the GPU; apps should use 
+    // Command list allocators can only be reset when the associated
+    // command lists have finished execution on the GPU; apps should use
     // fences to determine GPU execution progress.
+    // 【核心】这里只 Reset 每帧使用的主分配器；上一帧末尾的 Fence 等待保证 GPU 已不再使用它。
+    // m_bundleAllocator 没有在这里 Reset，因为 Bundle 仍要复用其中保存的命令记录。
     ThrowIfFailed(m_commandAllocator->Reset());
 
-    // However, when ExecuteCommandList() is called on a particular command 
-    // list, that command list can then be reset at any time and must be before 
+    // However, when ExecuteCommandList() is called on a particular command
+    // list, that command list can then be reset at any time and must be before
     // re-recording.
     ThrowIfFailed(m_commandList->Reset(m_commandAllocator.Get(), m_pipelineState.Get()));
 
     // Set necessary state.
+    // 【核心】主命令列表建立当前帧环境。Bundle 会继承这里的多数状态，
+    // 但 PSO 和图元拓扑例外，所以 Bundle 创建时提供 PSO，并在内部设置图元拓扑。
     m_commandList->SetGraphicsRootSignature(m_rootSignature.Get());
+
+    // Viewport 和 Scissor 命令不允许录进 Bundle，因此必须由 DIRECT 主命令列表设置。
     m_commandList->RSSetViewports(1, &m_viewport);
     m_commandList->RSSetScissorRects(1, &m_scissorRect);
 
+    // 【核心】资源屏障、渲染目标绑定和清屏都不能录进 Bundle；它们还依赖当前 m_frameIndex，
+    // 因而属于每帧主命令列表的职责。
     // Indicate that the back buffer will be used as a render target.
     m_commandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_renderTargets[m_frameIndex].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET));
 
@@ -314,10 +360,12 @@ void D3D12HelloBundles::PopulateCommandList()
     m_commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
 
     // Record commands.
-    const float clearColor[] = { 0.0f, 0.2f, 0.4f, 1.0f };
+    const float clearColor[] = {0.0f, 0.2f, 0.4f, 1.0f};
     m_commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
 
-    // Execute the commands stored in the bundle.
+    // 【核心】把“执行已关闭 Bundle”记录到当前 DIRECT 命令列表的这个位置。
+    // 这里仍没有向命令队列提交工作；真正执行发生在 OnRender 的 ExecuteCommandLists 之后。
+    // Bundle 内设置的根签名、图元拓扑和顶点缓冲区状态也会影响调用它的主命令列表后续状态。
     m_commandList->ExecuteBundle(m_bundle.Get());
 
     // Indicate that the back buffer will now be used to present.
